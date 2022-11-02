@@ -19,7 +19,7 @@ pip install -r requirements.txt
 | - | - |
 | `CLIENT_ID` | Идентификатор клиента вашего [магазина](https://www.elasticpath.com/) для доступа к API.
 | `CLIENT_SECRET` | Секретный ключ клиента вашего [магазина](https://www.elasticpath.com/) для доступа к API.
-| `BOT_TOKEN` | Токен вашего телеграм-бота.
+| `TELEGRAM_TOKEN` | Токен вашего телеграм-бота.
 | `REDIS_HOST` | Адрес хоста вашего сервера базы данных Redis.
 | `REDIS_PORT` | Номер порта вашего сервера базы данных Redis.
 | `REDIS_PASSWORD` | Пароль для подключения к вашей базе данных Redis.
