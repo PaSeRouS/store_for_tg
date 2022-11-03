@@ -17,8 +17,9 @@ _database = None
 logger = logging.getLogger(__name__)
 
 
-def get_keyboard():
-    products = get_products()
+def get_menu_keyboard():
+    env = get_env()
+    products = get_products(env['client_id'], env['client_secret'])
 
     keyboard = [
         [InlineKeyboardButton(product_name, callback_data=product_id)]
@@ -32,7 +33,8 @@ def get_keyboard():
 
 
 def get_cart(cart_id):
-    cart_items, full_price = get_cart_and_full_price(cart_id)
+    env = get_env()
+    cart_items, full_price = get_cart_and_full_price(cart_id, env['client_id'], env['client_secret'])
     cart_items_display = [
         dedent(
             f"""\
@@ -66,7 +68,7 @@ def get_cart(cart_id):
 
 
 def start(update, context):
-    keyboard = get_keyboard()
+    keyboard = get_menu_keyboard()
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     update.message.reply_text('Пожалуйста, выберите:', reply_markup=reply_markup)
@@ -76,6 +78,8 @@ def start(update, context):
 
 def handle_menu(update, context):
     users_reply = update.callback_query.data
+
+    env = get_env()
 
     if users_reply == "cart":
         update.callback_query.edit_message_reply_markup(reply_markup=None)
@@ -89,14 +93,28 @@ def handle_menu(update, context):
 
         return 'HANDLE_CART'
 
-    product_data = get_product_by_id(users_reply)
-    price_book = get_price_book()
+    product_data = get_product_by_id(
+        users_reply,
+        env['client_id'],
+        env['client_secret']
+    )
+    price_book = get_price_book(
+        env['client_id'],
+        env['client_secret'],
+        env['price_book_id']
+    )
 
     product_sku = product_data['data']['attributes']['sku']
     image_url = get_image_url(
-        product_data['data']['relationships']['main_image']['links']['self']
+        product_data['data']['relationships']['main_image']['links']['self'],
+        env['client_id'],
+        env['client_secret']
     )
-    amount_on_stock = get_amount_on_stock(users_reply)
+    amount_on_stock = get_amount_on_stock(
+        users_reply,
+        env['client_id'],
+        env['client_secret']
+    )
 
     for price in price_book['included']:
         if price['attributes']['sku'] == product_sku:
@@ -140,6 +158,8 @@ def handle_description(update, context):
 
     users_reply = update.callback_query.data
 
+    env = get_env()
+
     if users_reply == "cart":
         update.callback_query.edit_message_reply_markup(reply_markup=None)
         
@@ -154,7 +174,7 @@ def handle_description(update, context):
 
     if users_reply == "return":
         update.callback_query.edit_message_reply_markup(reply_markup=None)
-        keyboard = get_keyboard()
+        keyboard = get_menu_keyboard()
 
         reply_markup = InlineKeyboardMarkup(keyboard)
         update.callback_query.message.reply_text(
@@ -166,9 +186,11 @@ def handle_description(update, context):
 
     product_id, quantity = users_reply.split(":")
     add_product_to_cart(
-        cart_id=update.effective_chat.id,
-        product_id=product_id,
-        quantity=int(quantity)
+        update.effective_chat.id,
+        product_id,
+        int(quantity),
+        env['client_id'],
+        env['client_secret']
     )
     update.callback_query.answer(text="Товар добавлен в корзину")
 
@@ -181,10 +203,12 @@ def handle_cart(update, context):
 
     users_reply = update.callback_query.data
 
+    env = get_env()
+
     if users_reply == "return":
         update.callback_query.edit_message_reply_markup(reply_markup=None)
 
-        product_keyboard = get_keyboard()
+        product_keyboard = get_menu_keyboard()
 
         update.callback_query.message.reply_text(
             text="Что Вам интересно?",
@@ -204,8 +228,10 @@ def handle_cart(update, context):
 
 
     remove_product_from_cart(
-        cart_id=update.effective_chat.id,
-        item_id=users_reply
+        update.effective_chat.id,
+        users_reply,
+        env['client_id'],
+        env['client_secret']
     )
 
     text, cart_keyboard = get_cart(update.effective_chat.id)
@@ -222,7 +248,13 @@ def handle_cart(update, context):
 def waiting_email(update, context):
     users_reply = update.message.text
 
-    create_customer_by_email(users_reply)
+    env = get_env()
+
+    create_customer_by_email(
+        users_reply,
+        env['client_id'],
+        env['client_secret']
+    )
 
     text = f'Пользователь с email {users_reply} создан'
 
@@ -241,7 +273,12 @@ def waiting_email(update, context):
 
 
 def handle_users_reply(update, context):
-    db = get_database_connection()
+    env = get_env()
+    db = get_database_connection(
+        env['database_password'],
+        env['database_host'],
+        env['database_port']
+    )
     if update.message:
         user_reply = update.message.text
         chat_id = update.message.chat_id
@@ -270,19 +307,29 @@ def handle_users_reply(update, context):
     except Exception as err:
         print(err)
 
-def get_database_connection():
+def get_database_connection(password, host, port):
     """
     Возвращает конекшн с базой данных Redis, либо создаёт новый, если он ещё не создан.
     """
     global _database
     if _database is None:
-        env = Env()
-        env.read_env()
-        database_password = env("REDIS_PASSWORD")
-        database_host = env("REDIS_HOST")
-        database_port = env("REDIS_PORT")
-        _database = redis.Redis(host=database_host, port=database_port, password=database_password)
+        _database = redis.Redis(host=host, port=port, password=password)
     return _database
+
+
+def get_env():
+    env = Env()
+    env.read_env()
+
+    return {
+        'tg_token': env("TELEGRAM_TOKEN"),
+        'client_id': env('CLIENT_ID'),
+        'client_secret': env('CLIENT_SECRET'),
+        'price_book_id': env('PRICE_BOOK_ID'),
+        'database_password': env("REDIS_PASSWORD"),
+        'database_host': env("REDIS_HOST"),
+        'database_port': env("REDIS_PORT")
+    }
 
 
 def error(bot, update, error):
@@ -295,10 +342,8 @@ def main():
         level=logging.INFO
     )
 
-    env = Env()
-    env.read_env()
-    token = env("TELEGRAM_TOKEN")
-    updater = Updater(token)
+    env = get_env()
+    updater = Updater(env['tg_token'])
     dispatcher = updater.dispatcher
     dispatcher.add_handler(CallbackQueryHandler(handle_users_reply))
     dispatcher.add_handler(MessageHandler(Filters.text, handle_users_reply))

@@ -1,14 +1,24 @@
+import time
 import requests
 
-from environs import Env
+expires_on = 0
+access_token = None
 
-def get_headers():
-    env = Env()
-    env.read_env()
+
+def get_headers(client_id, client_secret):
+    global expires_on, access_token
+
+    now = time.time()
+
+    if access_token and now < expires_on:
+        return {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json',
+        }
 
     data = {
-        'client_id': env('CLIENT_ID'),
-        'client_secret': env('CLIENT_SECRET'),
+        'client_id': client_id,
+        'client_secret': client_secret,
         'grant_type': 'client_credentials',
     }
 
@@ -16,19 +26,17 @@ def get_headers():
     response.raise_for_status()
 
     access_token = response.json()['access_token']
+    expires_on = now + response.json()['expires_in']
 
-    headers = {
+    return {
         'Authorization': f'Bearer {access_token}',
         'Content-Type': 'application/json',
     }
 
-    return headers
 
+def get_products(client_id, client_secret):
+    headers = get_headers(client_id, client_secret)
 
-def get_products():
-    headers = get_headers()
-
-    # Получить все продукты
     response = requests.get('https://api.moltin.com/pcm/products', headers=headers)
     response.raise_for_status()
 
@@ -39,10 +47,9 @@ def get_products():
             for product in product_data['data']
         }
 
-def get_product_by_id(product_id):
-    headers = get_headers()
+def get_product_by_id(product_id, client_id, client_secret):
+    headers = get_headers(client_id, client_secret)
 
-    # Получить продукт по id
     url = f'https://api.moltin.com/pcm/products/{product_id}'
     response = requests.get(url, headers=headers)
     response.raise_for_status()
@@ -50,13 +57,8 @@ def get_product_by_id(product_id):
     return response.json()
 
 
-def get_price_book():
-    headers = get_headers()
-
-    # Получить price_book
-    env = Env()
-    env.read_env()
-    price_book_id = env('PRICE_BOOK_ID')
+def get_price_book(client_id, client_secret, price_book_id):
+    headers = get_headers(client_id, client_secret)
 
     params = {
         'include': 'prices',
@@ -69,8 +71,8 @@ def get_price_book():
     return response.json()
 
 
-def get_image_id(image_path):
-    headers = get_headers()
+def get_image_id(image_path, client_id, client_secret):
+    headers = get_headers(client_id, client_secret)
 
     url = f'https://api.moltin.com/pcm{image_path}'
     response = requests.get(url, headers=headers)
@@ -79,9 +81,9 @@ def get_image_id(image_path):
     return response.json()['data']['id']
 
 
-def get_image_url(image_path):
-    headers = get_headers()
-    image_id = get_image_id(image_path)
+def get_image_url(image_path, client_id, client_secret):
+    headers = get_headers(client_id, client_secret)
+    image_id = get_image_id(image_path, client_id, client_secret)
 
     url = f'https://api.moltin.com/v2/files/{image_id}'
 
@@ -91,8 +93,14 @@ def get_image_url(image_path):
     return response.json()['data']['link']['href']
 
 
-def add_product_to_cart(cart_id, product_id, quantity):
-    headers = get_headers()
+def add_product_to_cart(
+    cart_id,
+    product_id,
+    quantity,
+    client_id,
+    client_secret
+):
+    headers = get_headers(client_id, client_secret)
 
     url = f'https://api.moltin.com/v2/carts/{cart_id}/items'
 
@@ -108,10 +116,9 @@ def add_product_to_cart(cart_id, product_id, quantity):
     response.raise_for_status()
 
 
-def get_amount_on_stock(product_id):
-    headers = get_headers()
+def get_amount_on_stock(product_id, client_id, client_secret):
+    headers = get_headers(client_id, client_secret)
 
-    # Получить запас по id
     url = f'https://api.moltin.com/v2/inventories/{product_id}'
     response = requests.get(url, headers=headers)
     response.raise_for_status()
@@ -120,8 +127,8 @@ def get_amount_on_stock(product_id):
     return stock_info['data']['available']
 
 
-def get_cart_and_full_price(cart_id):
-    headers = get_headers()
+def get_cart_and_full_price(cart_id, client_id, client_secret):
+    headers = get_headers(client_id, client_secret)
 
     url = f'https://api.moltin.com/v2/carts/{cart_id}/items'
 
@@ -136,8 +143,8 @@ def get_cart_and_full_price(cart_id):
     )
 
 
-def remove_product_from_cart(cart_id, item_id):
-    headers = get_headers()
+def remove_product_from_cart(cart_id, item_id, client_id, client_secret):
+    headers = get_headers(client_id, client_secret)
 
     url = f'https://api.moltin.com/v2/carts/{cart_id}/items/{item_id}'
 
@@ -145,8 +152,8 @@ def remove_product_from_cart(cart_id, item_id):
     response.raise_for_status()
 
 
-def create_customer_by_email(email):
-    headers = get_headers()
+def create_customer_by_email(email, client_id, client_secret):
+    headers = get_headers(client_id, client_secret)
 
     url = 'https://api.moltin.com/v2/customers'
 
