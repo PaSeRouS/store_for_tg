@@ -25,8 +25,9 @@ def get_headers(client_id, client_secret):
     response = requests.post('https://api.moltin.com/oauth/access_token', data=data)
     response.raise_for_status()
 
-    access_token = response.json()['access_token']
-    expires_on = now + response.json()['expires_in']
+    access_data = response.json()
+    access_token = access_data['access_token']
+    expires_on = now + access_data['expires_in']
 
     return {
         'Authorization': f'Bearer {access_token}',
